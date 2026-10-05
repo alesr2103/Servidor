@@ -1,0 +1,24 @@
+./
+├── README.md
+├── __init__.py
+├── __pycache__/
+│   ├── __init__.cpython-312.pyc
+│   ├── app.cpython-312.pyc
+│   ├── config.cpython-312.pyc
+│   ├── http_handler.cpython-312.pyc
+│   ├── store.cpython-312.pyc
+│   ├── tls.cpython-312.pyc
+│   └── xml_resources.cpython-312.pyc
+├── app.py
+├── config.py
+├── estructura.txt
+├── http_handler.py
+├── store.py
+├── tests/
+│   ├── __init__.py
+│   ├── __pycache__/
+│   │   ├── __init__.cpython-312.pyc
+│   │   └── test_resources.cpython-312.pyc
+│   └── test_resources.py
+├── tls.py
+└── xml_resources.py
