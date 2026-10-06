@@ -1,3 +1,4 @@
+
 #!/usr/bin/env bash
 
 set -u
@@ -13,6 +14,7 @@ CLIENT_CERT_PEM="/tmp/pti_dev-validation.crt"
 CLIENT_KEY="$CLIENT_DIR/pti_dev.pem"
 SCHEMA="$CLIENT_DIR/sep.xsd"
 OUTPUT_DIR="/tmp/ieee20305-xsd"
+FSA_LIST_FILE="$OUTPUT_DIR/fsa-list.xml"
 CONTROL_LIST_FILE="$OUTPUT_DIR/der-control-list.xml"
 MUP_LIST_FILE="$OUTPUT_DIR/mirror-usage-point-list.xml"
 
@@ -36,8 +38,8 @@ skip() {
 }
 
 request_route() {
-    route="$1"
-    output="$2"
+    local route="$1"
+    local output="$2"
 
     curl --silent --show-error \
         --output "$output" \
@@ -52,9 +54,11 @@ request_route() {
 }
 
 validate_route() {
-    route="$1"
-    name="$2"
-    output="$OUTPUT_DIR/$name.xml"
+    local route="$1"
+    local name="$2"
+    local output="$OUTPUT_DIR/$name.xml"
+    local http_code
+
     http_code=$(request_route "$route" "$output")
 
     if test "$http_code" != "200"; then
@@ -84,22 +88,22 @@ validate_route() {
 }
 
 extract_routes() {
-    file="$1"
-    element_name="$2"
+    local file="$1"
+    local element_name="$2"
 
     python3 - "$file" "$element_name" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
 
-root = ET.parse(sys.argv[1]).getroot()
-element_name = sys.argv[2]
-routes = []
+root=ET.parse(sys.argv[1]).getroot()
+element_name=sys.argv[2]
+routes=[]
 
 for element in root.iter():
-    if element.tag.rsplit("}", 1)[-1] != element_name:
+    if element.tag.rsplit("}",1)[-1] != element_name:
         continue
 
-    href = element.get("href")
+    href=element.get("href")
 
     if href and href not in routes:
         routes.append(href)
@@ -109,11 +113,38 @@ for route in routes:
 PY
 }
 
+extract_first_href() {
+    local file="$1"
+    local element_name="$2"
+
+    python3 - "$file" "$element_name" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+root=ET.parse(sys.argv[1]).getroot()
+element_name=sys.argv[2]
+
+for element in root.iter():
+    if element.tag.rsplit("}",1)[-1] != element_name:
+        continue
+
+    href=element.get("href")
+
+    if href:
+        print(href)
+        break
+PY
+}
+
 validate_dynamic_controls() {
     if ! test -s "$CONTROL_LIST_FILE"; then
         fail "No existe DERControlList para extraer rutas dinámicas"
         return
     fi
+
+    local control_routes
+    local control_number=0
+    local route
 
     control_routes=$(extract_routes "$CONTROL_LIST_FILE" "DERControl")
 
@@ -121,8 +152,6 @@ validate_dynamic_controls() {
         pass "DERControlList no contiene controles vigentes"
         return
     fi
-
-    control_number=0
 
     while IFS= read -r route; do
         test -z "$route" && continue
@@ -133,12 +162,80 @@ $control_routes
 EOF
 }
 
+validate_dynamic_fsa() {
+    if ! test -s "$FSA_LIST_FILE"; then
+        fail "No existe FunctionSetAssignmentsList para extraer rutas dinámicas"
+        return
+    fi
+
+    local fsa_route
+    local program_list_route
+    local program_route
+    local default_control_route
+    local control_list_route
+
+    fsa_route=$(extract_first_href "$FSA_LIST_FILE" "FunctionSetAssignments")
+
+    if test -z "$fsa_route"; then
+        skip "FunctionSetAssignmentsList no contiene asignaciones FSA"
+        return
+    fi
+
+    if ! validate_route "$fsa_route" "fsa"; then
+        return
+    fi
+
+    program_list_route=$(extract_first_href "$OUTPUT_DIR/fsa.xml" "DERProgramListLink")
+
+    if test -z "$program_list_route"; then
+        skip "$fsa_route no contiene DERProgramListLink"
+        return
+    fi
+
+    if ! validate_route "$program_list_route" "der-program-list"; then
+        return
+    fi
+
+    program_route=$(extract_first_href "$OUTPUT_DIR/der-program-list.xml" "DERProgram")
+
+    if test -z "$program_route"; then
+        skip "$program_list_route no contiene programas DER"
+        return
+    fi
+
+    if ! validate_route "$program_route" "der-program"; then
+        return
+    fi
+
+    default_control_route=$(extract_first_href "$OUTPUT_DIR/der-program.xml" "DefaultDERControlLink")
+
+    if test -n "$default_control_route"; then
+        validate_route "$default_control_route" "default-der-control"
+    else
+        skip "$program_route no contiene DefaultDERControlLink"
+    fi
+
+    control_list_route=$(extract_first_href "$OUTPUT_DIR/der-program.xml" "DERControlListLink")
+
+    if test -n "$control_list_route"; then
+        if validate_route "$control_list_route" "der-control-list"; then
+            validate_dynamic_controls
+        fi
+    else
+        skip "$program_route no contiene DERControlListLink"
+    fi
+}
+
 validate_meter_readings() {
-    mup_route="$1"
-    mup_number="$2"
-    meter_list_route="$mup_route/mr"
-    meter_list_name="mirror-meter-reading-list-$mup_number"
-    meter_list_file="$OUTPUT_DIR/$meter_list_name.xml"
+    local mup_route="$1"
+    local mup_number="$2"
+    local meter_list_route="$mup_route/mr"
+    local meter_list_name="mirror-meter-reading-list-$mup_number"
+    local meter_list_file="$OUTPUT_DIR/$meter_list_name.xml"
+    local meter_routes
+    local meter_number=0
+    local meter_route
+    local reading_route
 
     validate_route "$meter_list_route" "$meter_list_name" || return
 
@@ -149,13 +246,10 @@ validate_meter_readings() {
         return
     fi
 
-    meter_number=0
-
     while IFS= read -r meter_route; do
         test -z "$meter_route" && continue
         meter_number=$((meter_number + 1))
         validate_route "$meter_route" "mirror-meter-reading-$mup_number-$meter_number"
-
         reading_route="$meter_route/r?l=2"
         validate_route "$reading_route" "reading-list-$mup_number-$meter_number"
     done <<EOF
@@ -169,14 +263,16 @@ validate_dynamic_telemetry() {
         return
     fi
 
+    local mup_routes
+    local mup_number=0
+    local mup_route
+
     mup_routes=$(extract_routes "$MUP_LIST_FILE" "MirrorUsagePoint")
 
     if test -z "$mup_routes"; then
         pass "MirrorUsagePointList no contiene puntos de medición"
         return
     fi
-
-    mup_number=0
 
     while IFS= read -r mup_route; do
         test -z "$mup_route" && continue
@@ -204,7 +300,7 @@ for required_file in "$SERVER_CA" "$CLIENT_CERT_DER" "$CLIENT_KEY" "$SCHEMA"; do
     fi
 done
 
-if ! ss -lnt | grep -q ':8443 '; then
+if ! ss -lnt | awk '$4 ~ /:8443$/ {found=1} END {exit !found}'; then
     fail "El servidor no está escuchando en el puerto 8443"
     echo "Inicie el servidor en otra terminal:"
     echo "  cd $PROJECT_DIR"
@@ -233,20 +329,18 @@ validate_route "/edev/1/der/1/dera" "der-availability"
 validate_route "/edev/1/der/1/dercap" "der-capability"
 validate_route "/edev/1/der/1/derg" "der-settings"
 validate_route "/edev/1/der/1/ders" "der-status"
-validate_route "/edev/1/fsa" "fsa-list"
-validate_route "/edev/1/fsa/1" "fsa"
-validate_route "/edev/1/fsa/1/derp" "der-program-list"
-validate_route "/edev/1/fsa/1/derp/1" "der-program"
-validate_route "/edev/1/fsa/1/derp/1/dderc" "default-der-control"
-validate_route "/edev/1/fsa/1/derp/1/derc" "der-control-list"
-validate_dynamic_controls
+
+if validate_route "/edev/1/fsa" "fsa-list"; then
+    validate_dynamic_fsa
+fi
 
 validate_route "/rsps" "response-set-list"
 validate_route "/rsps/1" "response-set"
 validate_route "/rsps/1/rsp" "response-list"
 
-validate_route "/mup" "mirror-usage-point-list"
-validate_dynamic_telemetry
+if validate_route "/mup" "mirror-usage-point-list"; then
+    validate_dynamic_telemetry
+fi
 
 echo
 echo "============================================================"
