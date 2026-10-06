@@ -3,8 +3,9 @@
 set -u
 set -o pipefail
 
-PROJECT_DIR="$HOME/Servidor"
-CLIENT_DIR="$HOME/Cliente-2030.5"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CLIENT_DIR="${EPRI_CLIENT_DIR:-$HOME/Cliente-2030.5}"
 SERVER_URL="https://127.0.0.1:8443"
 SERVER_CA="$PROJECT_DIR/certificados/lab-ca.crt"
 CLIENT_CERT_DER="$CLIENT_DIR/pti_dev.x509"

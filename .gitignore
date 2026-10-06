@@ -13,6 +13,7 @@ data/*.sqlite3
 *.pem
 *.crt
 *.csr
+*.srl
 
 .idea/
 .vscode/
@@ -22,3 +23,8 @@ mock_server_backup_mtls/
 certificados_backup_mtls/
 
 data/
+
+
+# Certificados públicos necesarios para las pruebas con el cliente EPRI
+!certificados/csep_root.pem
+!certificados/pti_dev.x509

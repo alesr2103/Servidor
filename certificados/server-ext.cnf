@@ -1,10 +1,7 @@
-basicConstraints = critical,CA:FALSE
-keyUsage = critical,digitalSignature,keyAgreement
-extendedKeyUsage = serverAuth
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid,issuer
-subjectAltName = critical,@alt_names
-
-[alt_names]
-DNS.1 = localhost
-IP.1 = 127.0.0.1
+[server_cert]
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature,keyAgreement
+extendedKeyUsage=serverAuth
+subjectAltName=critical,DNS:localhost,IP:127.0.0.1
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer
