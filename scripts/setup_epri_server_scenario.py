@@ -6,7 +6,8 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-PROJECT_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR=Path(__file__).resolve().parents[1]
+DATABASE=PROJECT_DIR/"data"/"server.db"
 
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
