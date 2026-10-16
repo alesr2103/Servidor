@@ -47,7 +47,7 @@ Entrega al servidor solamente el CSR (`client3.csr`) y el archivo de extensiones
 
     python3 -m mock_server.app
 
-El primer arranque ejecuta `initialize_database()` y registra un cliente de referencia (según `mock_server/config.py`). Si prefieres inicializar sin arrancar el servidor, ejecuta:
+El primer arranque ejecuta `initialize_database()` y registra un cliente de referencia (según `mock_server/config.py`). Si se quiere inicializar sin arrancar el servidor, ejecutar:
 
     python3 -c "from mock_server.database import initialize_database; initialize_database()"
 
@@ -62,6 +62,7 @@ Con el virtualenv activo y certificados en `certificados/`, arranca:
     python3 -m mock_server.app
 
 El servidor por defecto escucha en 0.0.0.0:8443 y usa TLS (ver `mock_server/config.py`). Los mensajes de log muestran la dirección y el SFDI configurado.
+IMPORTANTE: El servidor solo comienza a correr con el entorno virtual activo.
 
 10) Probar con el cliente de referencia o con curl (ejemplos)
 
