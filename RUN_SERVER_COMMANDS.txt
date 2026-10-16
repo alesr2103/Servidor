@@ -1,0 +1,99 @@
+# Ejecutar el Mock Server IEEE 2030.5
+
+A continuación se listan los comandos mínimos, en orden, para ejecutar este servidor en una máquina Linux/Unix después de clonar el repositorio.
+
+Asume: Python 3 instalado (>=3.8 recomendado), openssl CLI y acceso a la red local.
+
+1) Clonar el repositorio
+
+    git clone https://github.com/alesr2103/Servidor.git
+    cd Servidor
+
+2) Crear y activar un virtualenv (opcional pero recomendado)
+
+    python3 -m venv venv
+    source venv/bin/activate
+
+3) Instalar dependencias Python
+
+    pip install --upgrade pip
+    pip install -r requirements.txt
+
+4) Verificar que existan los certificados de prueba necesarios
+
+El proyecto espera algunos certificados en el directorio `certificados/`:
+- certificados/csep_root.pem   (CA pública CSEP)  ← debe estar en el repo o proporcionarse
+- certificados/pti_dev.x509    (certificado cliente EPRI en DER)  ← debe estar en el repo o proporcionarse
+
+Puedes listar los archivos con:
+
+    ls -l certificados
+
+Si no existen, coloca aquí los archivos que necesites antes de continuar. El script `scripts/generate_lab_certificates.py` copia y genera varios ficheros, pero sí requiere que `certificados/csep_root.pem` y `certificados/pti_dev.x509` estén presentes.
+
+5) (Opcional) Generar certificados de laboratorio
+
+    python3 scripts/generate_lab_certificates.py
+
+Este script crea una CA local y certificados de servidor/cliente en `certificados/` usados para pruebas. Requiere `openssl`.
+
+6) (Opcional) Crear CSR / clave privada para un nuevo dispositivo cliente
+
+    python3 scripts/create_device_request.py --name client3 --directory ./certificados --common-name client3
+
+Entrega al servidor solamente el CSR (`client3.csr`) y el archivo de extensiones (`client3-ext.cnf`).
+
+7) Inicializar la base de datos (opcional, el servidor también la inicializa automáticamente)
+
+    python3 -m mock_server.app
+
+El primer arranque ejecuta `initialize_database()` y registra un cliente de referencia (según `mock_server/config.py`). Si prefieres inicializar sin arrancar el servidor, ejecuta:
+
+    python3 -c "from mock_server.database import initialize_database; initialize_database()"
+
+8) (Opcional) Cargar datos de control DER por defecto
+
+    python3 initialize_der_control_data.py
+
+9) Ejecutar el servidor
+
+Con el virtualenv activo y certificados en `certificados/`, arranca:
+
+    python3 -m mock_server.app
+
+El servidor por defecto escucha en 0.0.0.0:8443 y usa TLS (ver `mock_server/config.py`). Los mensajes de log muestran la dirección y el SFDI configurado.
+
+10) Probar con el cliente de referencia o con curl (ejemplos)
+
+- Probar GET /dcap (requiere certificado cliente convertido a PEM si usas TLS con cliente autenticado):
+
+    # convertir certificado DER del cliente (si corresponde) a PEM para usar con curl
+    openssl x509 -inform DER -in ~/Cliente-2030.5/pti_dev.x509 -out /tmp/pti_dev.crt
+
+    curl --cacert certificados/lab-ca.crt --cert /tmp/pti_dev.crt --key ~/Cliente-2030.5/pti_dev.pem \
+      --tlsv1.2 --ciphers ECDHE-ECDSA-AES128-CCM8 https://127.0.0.1:8443/dcap
+
+- Ejecutar el conjunto de validación XSD y recorrido de recursos (requiere cliente EPRI y certificados):
+
+    bash scripts/validate_xsd.sh
+
+- Ejecutar pruebas de integración incluidas:
+
+    bash scripts/test_integration.sh
+
+11) Archivos y permisos
+
+- El script `generate_lab_certificates.py` establece permisos 600 para claves privadas (si no estás en Windows). Asegúrate de mantener permisos seguros para archivos `*.key` y `*.pem`.
+
+12) Notas y solución de problemas
+
+- Si el puerto 8443 está en uso, modifica `mock_server/config.py` (PORT) antes de arrancar.
+- Si no quieres exigir certificado cliente (solo HTTPS), edita `mock_server/config.py`:
+
+    TLS_REQUIRE_CLIENT_CERTIFICATE = False
+
+  y reinicia el servidor.
+
+- Asegúrate de que `certificados/client-trust-bundle.pem` existe y contiene la CA que firmó los certificados cliente.
+
+Fin.
